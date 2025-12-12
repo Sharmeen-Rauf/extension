@@ -36,6 +36,126 @@ async function initContentScript() {
   });
   
   console.log('[Check-in Logger] Content script initialized. Logging enabled:', isLoggingEnabled);
+  
+  // Add force detection function for debugging
+  window.forceCheckInDetection = async function() {
+    console.log('[Check-in Logger] 🔍 FORCE DETECTION - Scanning entire chat...');
+    
+    const messagePanel = document.querySelector('[data-testid="conversation-panel-messages"]');
+    if (!messagePanel) {
+      console.log('[Check-in Logger] ❌ Message panel not found!');
+      return 0;
+    }
+    
+    // Get all text content
+    const allText = messagePanel.innerText || messagePanel.textContent || '';
+    console.log('[Check-in Logger] Scanning', allText.length, 'characters of text...');
+    
+    // Keywords to search for
+    const keywords = {
+      checkin: ['check-in', 'checked in', 'checkin', 'check in', 'check-in:', 'checking in'],
+      checkout: ['check out', 'checked out', 'checkout', 'check-out', 'check out:', 'checking out']
+    };
+    
+    const foundMessages = [];
+    
+    // Find all spans with selectable text
+    const textSpans = messagePanel.querySelectorAll('span.selectable-text, span[class*="selectable"], span[dir="ltr"], span[dir="auto"]');
+    
+    console.log(`[Check-in Logger] Found ${textSpans.length} text spans to check...`);
+    
+    for (const span of textSpans) {
+      const text = (span.textContent || '').trim().toLowerCase();
+      if (text.length < 3 || text.length > 500) continue;
+      
+      // Check for check-in
+      for (const keyword of keywords.checkin) {
+        if (text.includes(keyword)) {
+          const fullText = (span.textContent || span.innerText || '').trim();
+          foundMessages.push({
+            text: fullText,
+            element: span,
+            type: 'checkin',
+            keyword: keyword
+          });
+          console.log(`[Check-in Logger] ✅ Found check-in: "${fullText.substring(0, 50)}"`);
+          break;
+        }
+      }
+      
+      // Check for check-out
+      for (const keyword of keywords.checkout) {
+        if (text.includes(keyword)) {
+          const fullText = (span.textContent || span.innerText || '').trim();
+          foundMessages.push({
+            text: fullText,
+            element: span,
+            type: 'checkout',
+            keyword: keyword
+          });
+          console.log(`[Check-in Logger] ✅ Found check-out: "${fullText.substring(0, 50)}"`);
+          break;
+        }
+      }
+    }
+    
+    console.log(`[Check-in Logger] Found ${foundMessages.length} check-in/out messages`);
+    
+    // Process found messages
+    if (foundMessages.length > 0) {
+      const groupName = await extractGroupName();
+      let stored = 0;
+      
+      for (const msg of foundMessages) {
+        const messageId = `force_${Date.now()}_${Math.random()}`;
+        
+        // Extract member name
+        let memberName = 'Unknown';
+        let current = msg.element;
+        for (let i = 0; i < 10; i++) {
+          if (current) {
+            const nameSpan = current.querySelector('span[title]');
+            if (nameSpan) {
+              memberName = nameSpan.getAttribute('title') || nameSpan.textContent || 'Unknown';
+              if (memberName !== 'Unknown') break;
+            }
+            current = current.parentElement;
+          } else {
+            break;
+          }
+        }
+        
+        const event = {
+          group: groupName,
+          name: memberName,
+          message: msg.text,
+          type: msg.type,
+          isoTimestamp: new Date().toISOString(),
+          id: messageId
+        };
+        
+        // Check if already stored
+        const result = await chrome.storage.local.get(['events']);
+        const events = result.events || [];
+        const exists = events.some(e => e.message === msg.text && e.type === msg.type);
+        
+        if (!exists) {
+          events.push(event);
+          await chrome.storage.local.set({ events });
+          stored++;
+          console.log(`[Check-in Logger] 💾 Stored:`, event);
+        }
+      }
+      
+      console.log(`[Check-in Logger] ✅ Stored ${stored} new events!`);
+      console.log(`[Check-in Logger] 💡 Click "Refresh" in extension popup to see events`);
+      return stored;
+    }
+    
+    return 0;
+  };
+  
+  console.log('[Check-in Logger] 💡 Force detection available! Type in console: window.forceCheckInDetection()');
 }
 
 /**
@@ -76,10 +196,12 @@ function startObserving() {
     if (isLoggingEnabled) {
       processNewMessages();
     }
-  }, 2000);
+  }, 3000);
   
-  // Process existing messages on load
-  setTimeout(processNewMessages, 2000);
+  // Process existing messages on load - try multiple times
+  setTimeout(processNewMessages, 1000);
+  setTimeout(processNewMessages, 3000);
+  setTimeout(processNewMessages, 5000);
 }
 
 /**
