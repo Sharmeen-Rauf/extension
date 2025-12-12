@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Promo Images for Chrome Web Store</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #25D366;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+    }
+    .image-preview {
+      margin: 30px 0;
+      padding: 20px;
+      background: #f9f9f9;
+      border-radius: 8px;
+    }
+    .image-preview h3 {
+      margin-top: 0;
+      color: #333;
+    }
+    canvas {
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      display: block;
+      margin: 10px 0;
+    }
+    .button-group {
+      margin: 20px 0;
+    }
+    button {
+      background: #25D366;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      margin: 5px;
+    }
+    button:hover {
+      background: #128C7E;
+    }
+    .info {
+      background: #e8f5e9;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    .info strong {
+      color: #2e7d32;
+    }
+    .instructions {
+      background: #fff3cd;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 20px 0;
+      border-left: 4px solid #ffc107;
+    }
+    .instructions ol {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+    .instructions li {
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Chrome Web Store Promo Image Generator</h1>
+    <p class="subtitle">Generate promotional tiles for your WhatsApp Check-in Logger extension</p>
+
+    <div class="info">
+      <strong>Note:</strong> These are placeholder images. For best results, create custom designs using Canva, Figma, or similar tools. However, these will work for submission.
+    </div>
+
+    <div class="instructions">
+      <strong>Instructions:</strong>
+      <ol>
+        <li>Click "Generate All Images" to create the promo tiles</li>
+        <li>Right-click each image and select "Save image as..."</li>
+        <li>Save with these names:
+          <ul>
+            <li><strong>small-promo-tile.png</strong> (440x280)</li>
+            <li><strong>marquee-promo-tile.png</strong> (1400x560)</li>
+          </ul>
+        </li>
+        <li>Upload to Chrome Web Store</li>
+      </ol>
+    </div>
+
+    <!-- Small Promo Tile -->
+    <div class="image-preview">
+      <h3>Small Promo Tile (440x280) - Optional</h3>
+      <canvas id="smallPromo" width="440" height="280"></canvas>
+      <button onclick="downloadCanvas('smallPromo', 'small-promo-tile.png')">Download Small Promo Tile</button>
+    </div>
+
+    <!-- Marquee Promo Tile -->
+    <div class="image-preview">
+      <h3>Marquee Promo Tile (1400x560) - Optional</h3>
+      <canvas id="marqueePromo" width="1400" height="560"></canvas>
+      <button onclick="downloadCanvas('marqueePromo', 'marquee-promo-tile.png')">Download Marquee Promo Tile</button>
+    </div>
+
+    <div class="button-group">
+      <button onclick="generateAll()">Generate All Images</button>
+      <button onclick="downloadAll()">Download All Images</button>
+    </div>
+
+    <div class="info">
+      <strong>Remember:</strong> Screenshots are REQUIRED (at least 1). These promo tiles are optional but recommended for better visibility in the Chrome Web Store.
+    </div>
+  </div>
+
+  <script>
+    function drawSmallPromo(canvas) {
+      const ctx = canvas.getContext('2d');
+      const width = 440;
+      const height = 280;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, width, height);
+      
+      // Background gradient (WhatsApp green)
+      const gradient = ctx.createLinearGradient(0, 0, width, height);
+      gradient.addColorStop(0, '#25D366');
+      gradient.addColorStop(1, '#128C7E');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+      
+      // White circle for icon area
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.beginPath();
+      ctx.arc(70, 70, 50, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Checkmark icon
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(50, 70);
+      ctx.lineTo(65, 85);
+      ctx.lineTo(90, 55);
+      ctx.stroke();
+      
+      // Title
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 24px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('WhatsApp', 130, 60);
+      ctx.font = 'bold 20px Arial';
+      ctx.fillText('Check-in Logger', 130, 90);
+      
+      // Subtitle
+      ctx.font = '16px Arial';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillText('Track attendance automatically', 130, 120);
+      
+      // Features
+      ctx.font = '14px Arial';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.fillText('✓ Real-time detection', 130, 150);
+      ctx.fillText('✓ CSV export', 130, 175);
+      ctx.fillText('✓ Privacy-focused', 130, 200);
+    }
+    
+    function drawMarqueePromo(canvas) {
+      const ctx = canvas.getContext('2d');
+      const width = 1400;
+      const height = 560;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, width, height);
+      
+      // Background gradient
+      const gradient = ctx.createLinearGradient(0, 0, width, height);
+      gradient.addColorStop(0, '#25D366');
+      gradient.addColorStop(1, '#128C7E');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+      
+      // Large icon area
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.beginPath();
+      ctx.arc(150, 280, 120, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Large checkmark
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 12;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(100, 280);
+      ctx.lineTo(140, 320);
+      ctx.lineTo(200, 240);
+      ctx.stroke();
+      
+      // Main title
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 48px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('WhatsApp Web', 320, 200);
+      ctx.fillText('Check-in Logger', 320, 260);
+      
+      // Subtitle
+      ctx.font = '28px Arial';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.fillText('Automatically track check-ins and check-outs from group chats', 320, 310);
+      
+      // Features
+      ctx.font = 'bold 22px Arial';
+      ctx.fillText('Real-time Detection', 320, 370);
+      ctx.font = '20px Arial';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillText('• CSV Export', 320, 400);
+      ctx.fillText('• Customizable Keywords', 320, 430);
+      ctx.fillText('• Privacy-Focused', 320, 460);
+      
+      // Right side features
+      ctx.font = 'bold 24px Arial';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'right';
+      ctx.fillText('Perfect for:', width - 100, 350);
+      ctx.font = '20px Arial';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillText('Team attendance tracking', width - 100, 380);
+      ctx.fillText('Office check-in/out logging', width - 100, 410);
+      ctx.fillText('Group activity monitoring', width - 100, 440);
+    }
+    
+    function generateAll() {
+      drawSmallPromo(document.getElementById('smallPromo'));
+      drawMarqueePromo(document.getElementById('marqueePromo'));
+      document.querySelector('.info').innerHTML = '<strong>✓ Images generated!</strong> Right-click each image to save, or use the download buttons.';
+    }
+    
+    function downloadCanvas(canvasId, filename) {
+      const canvas = document.getElementById(canvasId);
+      canvas.toBlob(function(blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    }
+    
+    function downloadAll() {
+      downloadCanvas('smallPromo', 'small-promo-tile.png');
+      setTimeout(() => {
+        downloadCanvas('marqueePromo', 'marquee-promo-tile.png');
+      }, 500);
+    }
+    
+    // Generate on load
+    window.onload = generateAll;
+  </script>
+</body>
+</html>
+
