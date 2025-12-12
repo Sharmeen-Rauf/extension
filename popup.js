@@ -68,9 +68,23 @@ async function loadSettings() {
  */
 async function loadEvents() {
   try {
-    const response = await chrome.runtime.sendMessage({ action: 'getEvents', limit: 50 });
+    // Clear loading message first
+    if (eventsContainer.innerHTML.includes('Loading events')) {
+      eventsContainer.innerHTML = '';
+    }
     
-    if (response && response.events) {
+    // Try to get events from background script
+    let response;
+    try {
+      response = await chrome.runtime.sendMessage({ action: 'getEvents', limit: 50 });
+    } catch (msgError) {
+      // If message fails, try to get events directly from storage
+      console.log('Background script not responding, getting events directly from storage');
+      const result = await chrome.storage.local.get(['events']);
+      response = { events: result.events || [] };
+    }
+    
+    if (response && response.events && Array.isArray(response.events)) {
       displayEvents(response.events);
       eventCount.textContent = `(${response.events.length})`;
     } else {
@@ -78,8 +92,10 @@ async function loadEvents() {
       eventCount.textContent = '(0)';
     }
   } catch (error) {
+    console.error('Error loading events:', error);
     showError('Error loading events: ' + error.message);
     displayEvents([]);
+    eventCount.textContent = '(0)';
   }
 }
 
@@ -110,7 +126,10 @@ async function loadKeywords() {
  * @param {Array} events - Array of event objects
  */
 function displayEvents(events) {
-  if (events.length === 0) {
+  // Clear container first to remove "Loading events..." message
+  eventsContainer.innerHTML = '';
+  
+  if (!events || events.length === 0) {
     eventsContainer.innerHTML = '<div class="empty-state">No events yet. Check-in/check-out messages will appear here.</div>';
     return;
   }
