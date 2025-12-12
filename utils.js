@@ -158,10 +158,14 @@ function extractMessageText(messageElement) {
     // Try multiple selectors for message text
     const textSelectors = [
       'span.selectable-text.copyable-text',
+      'span[data-testid="selectable-text"]',
       '.selectable-text',
       '[data-testid="conversation-compose-box-input"]',
       '.message-text',
-      'span[dir="ltr"]'
+      'span[dir="ltr"]',
+      'span[dir="auto"]',
+      'div[data-testid="msg-container"] span.selectable-text',
+      '[data-testid="msg-container"] span[class*="selectable"]'
     ];
     
     for (const selector of textSelectors) {
@@ -169,16 +173,34 @@ function extractMessageText(messageElement) {
       if (element) {
         const text = element.textContent || element.innerText;
         if (text && text.trim().length > 0) {
-          return text.trim();
+          // Filter out timestamps and metadata
+          const cleanText = text.trim();
+          // Skip if it looks like a timestamp or metadata
+          if (cleanText.match(/^\d{1,2}:\d{2}\s*(AM|PM)?$/i)) {
+            continue;
+          }
+          return cleanText;
         }
       }
     }
     
-    // Fallback: get all text content
+    // Fallback: get all text content but filter out common non-message elements
     const text = messageElement.textContent || messageElement.innerText;
-    return text ? text.trim() : '';
+    if (text) {
+      // Remove common WhatsApp UI elements
+      const cleaned = text
+        .replace(/\d{1,2}:\d{2}\s*(AM|PM)?/gi, '') // Remove timestamps
+        .replace(/✓\s*✓/g, '') // Remove read receipts
+        .trim();
+      
+      if (cleaned.length > 0 && cleaned.length < 500) {
+        return cleaned;
+      }
+    }
+    
+    return '';
   } catch (error) {
-    console.error('Error extracting message text:', error);
+    console.error('[Check-in Logger] Error extracting message text:', error);
     return '';
   }
 }

@@ -76,9 +76,10 @@ async function exportCSV() {
     const result = await chrome.storage.local.get(['events']);
     const events = result.events || [];
     
-    if (events.length === 0) {
-      throw new Error('No events to export');
-    }
+    // Allow export even with 0 events (empty CSV with headers)
+    // if (events.length === 0) {
+    //   throw new Error('No events to export');
+    // }
     
     // Generate CSV content
     const csvContent = generateCSV(events);

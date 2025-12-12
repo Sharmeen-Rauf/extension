@@ -23,11 +23,19 @@ async function initContentScript() {
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'toggleLogging') {
       isLoggingEnabled = request.enabled;
+      console.log(`[Check-in Logger] Logging ${isLoggingEnabled ? 'enabled' : 'disabled'}`);
       sendResponse({ success: true });
     } else if (request.action === 'getStatus') {
       sendResponse({ enabled: isLoggingEnabled });
+    } else if (request.action === 'forceCheck') {
+      // Force check for messages (for testing)
+      processNewMessages();
+      sendResponse({ success: true });
     }
+    return true; // Keep channel open for async response
   });
+  
+  console.log('[Check-in Logger] Content script initialized. Logging enabled:', isLoggingEnabled);
 }
 
 /**
@@ -79,32 +87,59 @@ function startObserving() {
  */
 async function processNewMessages() {
   try {
-    // Find all message containers
+    if (!isLoggingEnabled) {
+      return;
+    }
+    
+    // Find all message containers - try multiple selectors
     const messageSelectors = [
       '[data-testid="msg-container"]',
+      '[data-testid="conversation-panel-messages"] [data-testid="msg-container"]',
+      'div[data-testid="conversation-panel-messages"] > div > div',
       '.message',
-      '[data-testid="conversation-panel-messages"] > div > div'
+      'div[role="application"] div[role="row"]',
+      '[data-testid="msg-container"] > div'
     ];
     
     let messages = [];
     for (const selector of messageSelectors) {
-      messages = Array.from(document.querySelectorAll(selector));
-      if (messages.length > 0) break;
+      const found = document.querySelectorAll(selector);
+      if (found.length > 0) {
+        messages = Array.from(found);
+        console.log(`[Check-in Logger] Found ${messages.length} messages using selector: ${selector}`);
+        break;
+      }
     }
     
     if (messages.length === 0) {
-      return;
+      // Try to find messages by text content as fallback
+      const allDivs = document.querySelectorAll('[data-testid="conversation-panel-messages"] div');
+      messages = Array.from(allDivs).filter(div => {
+        const text = div.textContent || '';
+        return text.length > 5 && text.length < 500; // Reasonable message length
+      });
+      
+      if (messages.length === 0) {
+        return;
+      }
     }
     
     // Get group name once
     const groupName = await extractGroupName();
+    console.log(`[Check-in Logger] Processing messages in group: ${groupName}`);
     
     // Process each message
+    let processedCount = 0;
     for (const messageElement of messages) {
-      await processMessage(messageElement, groupName);
+      const result = await processMessage(messageElement, groupName);
+      if (result) processedCount++;
+    }
+    
+    if (processedCount > 0) {
+      console.log(`[Check-in Logger] Processed ${processedCount} new check-in/out events`);
     }
   } catch (error) {
-    console.error('Error processing messages:', error);
+    console.error('[Check-in Logger] Error processing messages:', error);
   }
 }
 
@@ -120,14 +155,15 @@ async function processMessage(messageElement, groupName) {
     
     // Skip if already processed
     if (processedMessageIds.has(messageId)) {
-      return;
+      return false;
     }
     
     // Extract message text
     const messageText = extractMessageText(messageElement);
     
     if (!messageText || messageText.trim().length === 0) {
-      return;
+      processedMessageIds.add(messageId);
+      return false;
     }
     
     // Parse for check-in/check-out
@@ -136,8 +172,10 @@ async function processMessage(messageElement, groupName) {
     if (!parseResult) {
       // Mark as processed even if not a check-in/out to avoid reprocessing
       processedMessageIds.add(messageId);
-      return;
+      return false;
     }
+    
+    console.log(`[Check-in Logger] Detected ${parseResult.type}: "${messageText}"`);
     
     // Extract member name
     const memberName = extractMemberName(messageElement);
@@ -154,6 +192,7 @@ async function processMessage(messageElement, groupName) {
     
     // Store event
     await storeEvent(event);
+    console.log(`[Check-in Logger] Stored event:`, event);
     
     // Mark as processed
     processedMessageIds.add(messageId);
@@ -166,8 +205,10 @@ async function processMessage(messageElement, groupName) {
       // Ignore errors if background script is not ready
     });
     
+    return true;
   } catch (error) {
-    console.error('Error processing message:', error);
+    console.error('[Check-in Logger] Error processing message:', error);
+    return false;
   }
 }
 
