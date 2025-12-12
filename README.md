@@ -15,12 +15,35 @@ A Chrome extension that automatically detects and logs check-in/check-out messag
 
 ## Installation
 
-### Step 1: Download the Extension
+### 🚀 Easy Installation from Chrome Web Store (Recommended)
+
+**The easiest way to install the extension:**
+
+1. Open Google Chrome
+2. Go to the [Chrome Web Store](https://chrome.google.com/webstore)
+3. Search for **"WhatsApp Web Check-in Logger"**
+4. Click **"Add to Chrome"**
+5. Click **"Add Extension"** in the confirmation dialog
+6. The extension is now installed!
+
+**That's it!** No need to download files or enable developer mode. The extension will automatically update when new versions are released.
+
+### 🔧 Manual Installation (For Developers)
+
+If you want to install from source code or the extension is not yet available on the Chrome Web Store:
+
+#### Step 1: Download the Extension
 
 1. Clone or download this repository to your computer
 2. Make sure all files are in a single folder
 
-### Step 2: Load the Extension in Chrome
+#### Step 2: Create Icons
+
+1. Open `create-icons.html` in your browser
+2. Click "Download All Icons"
+3. Save the three icon files (icon16.png, icon48.png, icon128.png) in the extension folder
+
+#### Step 3: Load the Extension in Chrome
 
 1. Open Google Chrome
 2. Navigate to `chrome://extensions/`
@@ -29,7 +52,7 @@ A Chrome extension that automatically detects and logs check-in/check-out messag
 5. Select the folder containing the extension files
 6. The extension should now appear in your extensions list
 
-### Step 3: Grant Permissions
+#### Step 4: Grant Permissions
 
 When you first use the extension, Chrome will prompt you for permissions:
 - **activeTab**: Allows the extension to access the active tab (WhatsApp Web)
@@ -40,7 +63,7 @@ When you first use the extension, Chrome will prompt you for permissions:
 
 Click **Allow** to grant these permissions.
 
-### Step 4: Verify Installation
+#### Step 5: Verify Installation
 
 1. Open WhatsApp Web in Chrome (`https://web.whatsapp.com`)
 2. Click the extension icon in the Chrome toolbar
@@ -211,12 +234,28 @@ The extension includes commented-out code for Google Sheets sync. To enable:
 - Group name extraction may not work perfectly in all cases
 - Member name extraction depends on WhatsApp Web's DOM structure (may break if WhatsApp updates their UI)
 
+## Publishing to Chrome Web Store
+
+Want to publish this extension to the Chrome Web Store so users can easily install it?
+
+See **[CHROME_STORE_GUIDE.md](CHROME_STORE_GUIDE.md)** for complete step-by-step instructions.
+
+**Quick summary:**
+1. Create a Chrome Web Store Developer account ($5 one-time fee)
+2. Prepare your extension files (use `prepare-for-store.ps1` or `prepare-for-store.sh`)
+3. Upload to Chrome Web Store Developer Dashboard
+4. Fill in store listing (see `STORE_LISTING.md` for ready-to-use content)
+5. Submit for review
+
+Once published, users can simply search for "WhatsApp Web Check-in Logger" and install with one click!
+
 ## Support
 
 For issues, questions, or contributions:
 1. Check the Troubleshooting section above
 2. Review browser console for error messages
 3. Verify all files are present and correctly formatted
+4. If installed from Chrome Web Store, check the extension's store page for updates and support
 
 ## License
 
