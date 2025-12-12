@@ -1,151 +1,68 @@
 /**
- * Popup script for WhatsApp Web Check-in Logger
- * Handles UI interactions and displays status/events
+ * SIMPLE Popup - WhatsApp Check-in Logger
  */
 
-// DOM elements
+// Elements
 const loggingToggle = document.getElementById('loggingToggle');
-const autoDownloadToggle = document.getElementById('autoDownloadToggle');
 const downloadBtn = document.getElementById('downloadBtn');
 const clearBtn = document.getElementById('clearBtn');
 const refreshBtn = document.getElementById('refreshBtn');
-const editKeywordsBtn = document.getElementById('editKeywordsBtn');
-const statusIndicator = document.getElementById('statusIndicator');
-const statusDot = document.getElementById('statusDot');
-const statusText = document.getElementById('statusText');
+const scanNowBtn = document.getElementById('scanNowBtn');
 const eventsContainer = document.getElementById('eventsContainer');
 const eventCount = document.getElementById('eventCount');
-const errorContainer = document.getElementById('errorContainer');
-const checkinKeywords = document.getElementById('checkinKeywords');
-const checkoutKeywords = document.getElementById('checkoutKeywords');
 
-// Modal elements
-const keywordsModal = document.getElementById('keywordsModal');
-const closeModalBtn = document.getElementById('closeModalBtn');
-const saveKeywordsBtn = document.getElementById('saveKeywordsBtn');
-const cancelKeywordsBtn = document.getElementById('cancelKeywordsBtn');
-const checkinKeywordsInput = document.getElementById('checkinKeywordsInput');
-const checkoutKeywordsInput = document.getElementById('checkoutKeywordsInput');
-
-/**
- * Initializes the popup
- */
-async function initPopup() {
-  // Load settings
+// Initialize
+async function init() {
   await loadSettings();
-  
-  // Load events
   await loadEvents();
-  
-  // Load keywords
-  await loadKeywords();
-  
-  // Check if on WhatsApp Web
-  checkWhatsAppWeb();
-  
-  // Set up event listeners
-  setupEventListeners();
+  setupListeners();
 }
 
-/**
- * Loads settings from storage
- */
+// Load settings
 async function loadSettings() {
-  try {
-    const result = await chrome.storage.local.get(['loggingEnabled', 'autoDownload']);
-    
-    loggingToggle.checked = result.loggingEnabled !== false; // Default to true
-    autoDownloadToggle.checked = result.autoDownload === true;
-    
-    updateStatus(result.loggingEnabled !== false);
-  } catch (error) {
-    showError('Error loading settings: ' + error.message);
-  }
+  const result = await chrome.storage.local.get(['loggingEnabled']);
+  loggingToggle.checked = result.loggingEnabled !== false;
 }
 
-/**
- * Loads events from storage
- */
+// Load events
 async function loadEvents() {
   try {
-    // Clear loading message first
-    if (eventsContainer.innerHTML.includes('Loading events')) {
-      eventsContainer.innerHTML = '';
-    }
+    const result = await chrome.storage.local.get(['events']);
+    const events = result.events || [];
     
-    // Try to get events from background script
-    let response;
-    try {
-      response = await chrome.runtime.sendMessage({ action: 'getEvents', limit: 50 });
-    } catch (msgError) {
-      // If message fails, try to get events directly from storage
-      console.log('Background script not responding, getting events directly from storage');
-      const result = await chrome.storage.local.get(['events']);
-      response = { events: result.events || [] };
-    }
-    
-    if (response && response.events && Array.isArray(response.events)) {
-      displayEvents(response.events);
-      eventCount.textContent = `(${response.events.length})`;
-    } else {
-      displayEvents([]);
-      eventCount.textContent = '(0)';
-    }
+    displayEvents(events);
+    eventCount.textContent = `(${events.length})`;
   } catch (error) {
     console.error('Error loading events:', error);
-    showError('Error loading events: ' + error.message);
     displayEvents([]);
-    eventCount.textContent = '(0)';
   }
 }
 
-/**
- * Loads keywords from storage
- */
-async function loadKeywords() {
-  try {
-    const result = await chrome.storage.local.get(['keywords']);
-    const keywords = result.keywords || {
-      checkin: ['check-in', 'checked in', 'checkin', 'in', 'present', 'here', 'arrived'],
-      checkout: ['check out', 'checked out', 'checkout', 'out', 'left', 'exit', 'gone', 'departed']
-    };
-    
-    checkinKeywords.textContent = keywords.checkin.join(', ');
-    checkoutKeywords.textContent = keywords.checkout.join(', ');
-    
-    // Set modal inputs
-    checkinKeywordsInput.value = keywords.checkin.join(', ');
-    checkoutKeywordsInput.value = keywords.checkout.join(', ');
-  } catch (error) {
-    showError('Error loading keywords: ' + error.message);
-  }
-}
-
-/**
- * Displays events in the container
- * @param {Array} events - Array of event objects
- */
+// Display events
 function displayEvents(events) {
-  // Clear container first to remove "Loading events..." message
   eventsContainer.innerHTML = '';
   
-  if (!events || events.length === 0) {
-    eventsContainer.innerHTML = '<div class="empty-state">No events yet. Check-in/check-out messages will appear here.</div>';
+  if (events.length === 0) {
+    eventsContainer.innerHTML = '<div class="empty-state">No events yet. Click "Scan Now" to find check-in/out messages.</div>';
     return;
   }
   
-  const html = events.map(event => {
+  // Show last 20 events
+  const recentEvents = events.slice(-20).reverse();
+  
+  const html = recentEvents.map(event => {
     const typeClass = event.type === 'checkin' ? 'checkin' : 'checkout';
-    const timestamp = formatTimestamp(event.isoTimestamp);
+    const date = new Date(event.isoTimestamp);
+    const time = date.toLocaleTimeString();
     
     return `
       <div class="event-item ${typeClass}">
         <div class="event-header">
-          <span class="event-name">${escapeHtml(event.name || 'Unknown')}</span>
+          <span class="event-name">${escapeHtml(event.name || 'User')}</span>
           <span class="event-type ${typeClass}">${event.type}</span>
         </div>
         <div class="event-message">${escapeHtml(event.message || '')}</div>
-        <div class="event-timestamp">${escapeHtml(timestamp)}</div>
+        <div class="event-timestamp">${escapeHtml(time)}</div>
       </div>
     `;
   }).join('');
@@ -153,134 +70,60 @@ function displayEvents(events) {
   eventsContainer.innerHTML = html;
 }
 
-/**
- * Updates status indicator
- * @param {boolean} enabled - Whether logging is enabled
- */
-function updateStatus(enabled) {
-  if (enabled) {
-    statusDot.classList.add('active');
-    statusDot.classList.remove('inactive');
-    statusText.textContent = 'Logging Active';
-  } else {
-    statusDot.classList.remove('active');
-    statusDot.classList.add('inactive');
-    statusText.textContent = 'Logging Inactive';
-  }
-}
-
-/**
- * Checks if user is on WhatsApp Web
- */
-async function checkWhatsAppWeb() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
-    if (tab && tab.url && tab.url.includes('web.whatsapp.com')) {
-      // On WhatsApp Web
-      statusText.textContent = loggingToggle.checked ? 'Logging Active' : 'Logging Inactive';
-    } else {
-      // Not on WhatsApp Web
-      statusText.textContent = 'Not on WhatsApp Web';
-      statusDot.classList.remove('active');
-      statusDot.classList.add('inactive');
-    }
-  } catch (error) {
-    console.error('Error checking WhatsApp Web:', error);
-  }
-}
-
-/**
- * Sets up event listeners
- */
-function setupEventListeners() {
+// Setup listeners
+function setupListeners() {
   // Logging toggle
   loggingToggle.addEventListener('change', async () => {
-    const enabled = loggingToggle.checked;
-    updateStatus(enabled);
-    
-    try {
-      await chrome.storage.local.set({ loggingEnabled: enabled });
-      
-      // Notify content script
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab && tab.url && tab.url.includes('web.whatsapp.com')) {
-        chrome.tabs.sendMessage(tab.id, { action: 'toggleLogging', enabled });
-      }
-    } catch (error) {
-      showError('Error updating logging status: ' + error.message);
-      loggingToggle.checked = !enabled; // Revert
-    }
+    await chrome.storage.local.set({ loggingEnabled: loggingToggle.checked });
   });
   
-  // Auto-download toggle
-  autoDownloadToggle.addEventListener('change', async () => {
-    try {
-      await chrome.storage.local.set({ autoDownload: autoDownloadToggle.checked });
-    } catch (error) {
-      showError('Error updating auto-download setting: ' + error.message);
-      autoDownloadToggle.checked = !autoDownloadToggle.checked; // Revert
-    }
-  });
-  
-  // Download button
+  // Download CSV
   downloadBtn.addEventListener('click', async () => {
-    downloadBtn.disabled = true;
-    downloadBtn.textContent = 'Exporting...';
-    
     try {
-      const response = await chrome.runtime.sendMessage({ action: 'exportCSV' });
+      const result = await chrome.storage.local.get(['events']);
+      const events = result.events || [];
       
-      if (response && response.success) {
-        showError('CSV exported successfully!', 'success');
-      } else {
-        showError(response?.error || 'Failed to export CSV');
+      if (events.length === 0) {
+        alert('No events to export');
+        return;
       }
+      
+      // Create CSV
+      const csv = 'Group,Name,Message,Type,Timestamp\n' +
+        events.map(e => 
+          `"${e.group}","${e.name}","${e.message}","${e.type}","${e.isoTimestamp}"`
+        ).join('\n');
+      
+      // Download
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `whatsapp-checkins-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      alert('CSV downloaded!');
     } catch (error) {
-      showError('Error exporting CSV: ' + error.message);
-    } finally {
-      downloadBtn.disabled = false;
-      downloadBtn.textContent = 'Download CSV';
+      alert('Error: ' + error.message);
     }
   });
   
-  // Clear button
+  // Clear events
   clearBtn.addEventListener('click', async () => {
-    if (!confirm('Are you sure you want to clear all events? This cannot be undone.')) {
-      return;
-    }
-    
-    clearBtn.disabled = true;
-    
-    try {
-      const response = await chrome.runtime.sendMessage({ action: 'clearEvents' });
-      
-      if (response && response.success) {
-        await loadEvents();
-        showError('Events cleared successfully!', 'success');
-      } else {
-        showError(response?.error || 'Failed to clear events');
-      }
-    } catch (error) {
-      showError('Error clearing events: ' + error.message);
-    } finally {
-      clearBtn.disabled = false;
+    if (confirm('Clear all events?')) {
+      await chrome.storage.local.set({ events: [] });
+      await loadEvents();
+      alert('Events cleared!');
     }
   });
   
-  // Refresh button
+  // Refresh
   refreshBtn.addEventListener('click', async () => {
-    refreshBtn.disabled = true;
-    refreshBtn.textContent = 'Refreshing...';
-    
     await loadEvents();
-    
-    refreshBtn.disabled = false;
-    refreshBtn.textContent = 'Refresh';
   });
   
-  // Scan Now button
-  const scanNowBtn = document.getElementById('scanNowBtn');
+  // Scan Now
   scanNowBtn.addEventListener('click', async () => {
     scanNowBtn.disabled = true;
     scanNowBtn.textContent = 'Scanning...';
@@ -288,274 +131,44 @@ function setupEventListeners() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab && tab.url && tab.url.includes('web.whatsapp.com')) {
-        // Inject and run scan script
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: scanAndStoreMessages
-        });
+        // Send message to content script
+        chrome.tabs.sendMessage(tab.id, { action: 'scanNow' });
         
-        // Wait for processing
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Reload events
-        await loadEvents();
-        
-        scanNowBtn.textContent = '✅ Scanned!';
-        setTimeout(() => {
-          scanNowBtn.textContent = '🔍 Scan Messages Now';
+        // Wait and reload
+        setTimeout(async () => {
+          await loadEvents();
+          scanNowBtn.textContent = '✅ Scanned!';
+          setTimeout(() => {
+            scanNowBtn.textContent = '🔍 Scan Now';
+            scanNowBtn.disabled = false;
+          }, 2000);
         }, 2000);
       } else {
-        showError('Please open WhatsApp Web first');
-        scanNowBtn.textContent = '🔍 Scan Messages Now';
+        alert('Please open WhatsApp Web first');
+        scanNowBtn.textContent = '🔍 Scan Now';
+        scanNowBtn.disabled = false;
       }
     } catch (error) {
-      console.error('Error scanning:', error);
-      showError('Error scanning: ' + error.message);
-      scanNowBtn.textContent = '🔍 Scan Messages Now';
-    } finally {
+      alert('Error: ' + error.message);
+      scanNowBtn.textContent = '🔍 Scan Now';
       scanNowBtn.disabled = false;
     }
   });
-  
-  // Edit keywords button
-  editKeywordsBtn.addEventListener('click', () => {
-    keywordsModal.classList.add('show');
-  });
-  
-  // Close modal button
-  closeModalBtn.addEventListener('click', () => {
-    keywordsModal.classList.remove('show');
-  });
-  
-  // Cancel keywords button
-  cancelKeywordsBtn.addEventListener('click', () => {
-    keywordsModal.classList.remove('show');
-    // Reset inputs
-    loadKeywords();
-  });
-  
-  // Save keywords button
-  saveKeywordsBtn.addEventListener('click', async () => {
-    try {
-      const checkinKeywordsList = checkinKeywordsInput.value
-        .split(',')
-        .map(k => k.trim())
-        .filter(k => k.length > 0);
-      
-      const checkoutKeywordsList = checkoutKeywordsInput.value
-        .split(',')
-        .map(k => k.trim())
-        .filter(k => k.length > 0);
-      
-      if (checkinKeywordsList.length === 0 || checkoutKeywordsList.length === 0) {
-        showError('Please provide at least one keyword for each type');
-        return;
-      }
-      
-      const keywords = {
-        checkin: checkinKeywordsList,
-        checkout: checkoutKeywordsList
-      };
-      
-      const response = await chrome.runtime.sendMessage({ action: 'updateKeywords', keywords });
-      
-      if (response && response.success) {
-        await loadKeywords();
-        keywordsModal.classList.remove('show');
-        showError('Keywords updated successfully!', 'success');
-      } else {
-        showError(response?.error || 'Failed to update keywords');
-      }
-    } catch (error) {
-      showError('Error updating keywords: ' + error.message);
-    }
-  });
-  
-  // Close modal on outside click
-  keywordsModal.addEventListener('click', (e) => {
-    if (e.target === keywordsModal) {
-      keywordsModal.classList.remove('show');
-    }
-  });
 }
 
-/**
- * Shows an error message
- * @param {string} message - Error message
- * @param {string} type - Message type ('error' or 'success')
- */
-function showError(message, type = 'error') {
-  errorContainer.textContent = message;
-  errorContainer.className = 'error-container show';
-  
-  if (type === 'success') {
-    errorContainer.style.background = '#e8f5e9';
-    errorContainer.style.borderColor = '#4CAF50';
-    errorContainer.style.color = '#2e7d32';
-  } else {
-    errorContainer.style.background = '#ffebee';
-    errorContainer.style.borderColor = '#f44336';
-    errorContainer.style.color = '#c62828';
-  }
-  
-  // Auto-hide after 5 seconds
-  setTimeout(() => {
-    errorContainer.classList.remove('show');
-  }, 5000);
-}
-
-/**
- * Formats timestamp for display
- * @param {string} isoTimestamp - ISO timestamp string
- * @returns {string} - Formatted date/time string
- */
-function formatTimestamp(isoTimestamp) {
-  try {
-    const date = new Date(isoTimestamp);
-    return date.toLocaleString();
-  } catch (error) {
-    return isoTimestamp;
-  }
-}
-
-/**
- * Escapes HTML to prevent XSS
- * @param {string} text - Text to escape
- * @returns {string} - Escaped text
- */
+// Escape HTML
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
 }
 
-// Scan function to inject into WhatsApp Web page
-function scanAndStoreMessages() {
-  console.log('[Check-in Logger] 🔍 MANUAL SCAN - Starting aggressive scan...');
-  
-  const messagePanel = document.querySelector('[data-testid="conversation-panel-messages"]');
-  if (!messagePanel) {
-    console.log('[Check-in Logger] ❌ Message panel not found!');
-    return;
-  }
-  
-  // Keywords
-  const keywords = {
-    checkin: ['check-in', 'checked in', 'checkin', 'check in', 'check-in:', 'checking in', 'in'],
-    checkout: ['check out', 'checked out', 'checkout', 'check-out', 'check out:', 'checking out', 'out']
-  };
-  
-  const foundMessages = [];
-  
-  // Get all text spans
-  const textSpans = messagePanel.querySelectorAll('span');
-  
-  console.log(`[Check-in Logger] Scanning ${textSpans.length} spans...`);
-  
-  textSpans.forEach(span => {
-    const text = (span.textContent || '').trim();
-    if (text.length < 2 || text.length > 500) return;
-    
-    const lowerText = text.toLowerCase();
-    
-    // Check for check-in
-    for (const keyword of keywords.checkin) {
-      if (lowerText.includes(keyword)) {
-        foundMessages.push({ text, type: 'checkin', element: span });
-        console.log(`[Check-in Logger] ✅ Found check-in: "${text}"`);
-        return;
-      }
-    }
-    
-    // Check for check-out
-    for (const keyword of keywords.checkout) {
-      if (lowerText.includes(keyword)) {
-        foundMessages.push({ text, type: 'checkout', element: span });
-        console.log(`[Check-in Logger] ✅ Found check-out: "${text}"`);
-        return;
-      }
-    }
-  });
-  
-  console.log(`[Check-in Logger] Found ${foundMessages.length} check-in/out messages`);
-  
-  if (foundMessages.length === 0) {
-    console.log('[Check-in Logger] ⚠️ No messages found. Make sure you\'re in a chat with check-in/out messages.');
-    return;
-  }
-  
-  // Get group name
-  let groupName = 'Unknown Group';
-  const header = document.querySelector('[data-testid="conversation-info-header"] span[title]');
-  if (header) {
-    groupName = header.getAttribute('title') || header.textContent || 'Unknown Group';
-  }
-  
-  // Store messages
-  chrome.storage.local.get(['events'], async (result) => {
-    const events = result.events || [];
-    let stored = 0;
-    
-    for (const msg of foundMessages) {
-      // Check if already exists
-      const exists = events.some(e => 
-        e.message === msg.text && 
-        e.type === msg.type &&
-        e.group === groupName
-      );
-      
-      if (!exists) {
-        // Try to get member name
-        let memberName = 'Unknown';
-        let current = msg.element;
-        for (let i = 0; i < 10; i++) {
-          if (current) {
-            const nameSpan = current.querySelector('span[title]');
-            if (nameSpan) {
-              const name = nameSpan.getAttribute('title') || nameSpan.textContent;
-              if (name && name.length > 0 && name.length < 100) {
-                memberName = name;
-                break;
-              }
-            }
-            current = current.parentElement;
-          } else {
-            break;
-          }
-        }
-        
-        const event = {
-          group: groupName,
-          name: memberName,
-          message: msg.text,
-          type: msg.type,
-          isoTimestamp: new Date().toISOString(),
-          id: `scan_${Date.now()}_${Math.random()}`
-        };
-        
-        events.push(event);
-        stored++;
-        console.log(`[Check-in Logger] 💾 Stored:`, event);
-      }
-    }
-    
-    if (stored > 0) {
-      await chrome.storage.local.set({ events });
-      console.log(`[Check-in Logger] ✅ Stored ${stored} new events!`);
-      console.log(`[Check-in Logger] 💡 Click "Refresh" in extension popup to see events`);
-    } else {
-      console.log(`[Check-in Logger] ℹ️ All messages already stored`);
-    }
-  });
-}
-
-// Initialize when DOM is ready
+// Start
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initPopup);
+  document.addEventListener('DOMContentLoaded', init);
 } else {
-  initPopup();
+  init();
 }
 
-// Refresh events every 5 seconds
-setInterval(loadEvents, 5000);
-
+// Auto-refresh every 3 seconds
+setInterval(loadEvents, 3000);
