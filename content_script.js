@@ -94,23 +94,31 @@ async function processNewMessages() {
     
     console.log('[Check-in Logger] Starting message processing...');
     
-    // Find all message containers - try multiple selectors
+    // Get group name first
+    const groupName = await extractGroupName();
+    
+    // Find message panel
+    const messagePanel = document.querySelector('[data-testid="conversation-panel-messages"]');
+    if (!messagePanel) {
+      console.log('[Check-in Logger] Message panel not found!');
+      return;
+    }
+    
+    // Strategy 1: Try standard selectors
     const messageSelectors = [
       '[data-testid="msg-container"]',
       '[data-testid="conversation-panel-messages"] [data-testid="msg-container"]',
       'div[data-testid="conversation-panel-messages"] > div > div',
       'div[data-testid="conversation-panel-messages"] div[data-testid="msg-container"]',
-      '.message',
-      'div[role="application"] div[role="row"]',
-      '[data-testid="msg-container"] > div',
-      'div[data-testid="conversation-panel-messages"] > div[role="row"]'
+      'div[data-testid="conversation-panel-messages"] > div[role="row"]',
+      '[data-testid="msg-container"] > div'
     ];
     
     let messages = [];
     let usedSelector = '';
     
     for (const selector of messageSelectors) {
-      const found = document.querySelectorAll(selector);
+      const found = messagePanel.querySelectorAll(selector);
       if (found.length > 0) {
         messages = Array.from(found);
         usedSelector = selector;
@@ -119,34 +127,84 @@ async function processNewMessages() {
       }
     }
     
+    // Strategy 2: If no messages found, scan all spans with selectable text
     if (messages.length === 0) {
-      console.log('[Check-in Logger] No messages found with standard selectors, trying fallback...');
-      // Try to find messages by text content as fallback
-      const messagePanel = document.querySelector('[data-testid="conversation-panel-messages"]');
-      if (messagePanel) {
-        const allDivs = messagePanel.querySelectorAll('div');
-        messages = Array.from(allDivs).filter(div => {
-          const text = (div.textContent || '').trim();
-          // Look for divs that contain message-like text
-          const hasText = text.length > 3 && text.length < 500;
-          const hasTime = text.match(/\d{1,2}:\d{2}/); // Has timestamp
-          const notEmpty = text.length > 0;
-          return hasText && notEmpty;
-        });
-        console.log(`[Check-in Logger] Fallback found ${messages.length} potential message divs`);
-      } else {
-        console.log('[Check-in Logger] Message panel not found!');
-        return;
-      }
+      console.log('[Check-in Logger] No messages found with standard selectors, trying text-based search...');
       
-      if (messages.length === 0) {
-        console.log('[Check-in Logger] No messages found at all');
-        return;
-      }
+      // Find all spans with selectable text (WhatsApp message text)
+      const textSpans = messagePanel.querySelectorAll('span.selectable-text, span[class*="selectable"], span[dir="ltr"], span[dir="auto"]');
+      
+      // Group spans by their parent message container
+      const messageMap = new Map();
+      
+      textSpans.forEach(span => {
+        const text = (span.textContent || '').trim();
+        if (text.length > 0 && text.length < 500) {
+          // Find parent message container
+          let parent = span.closest('[data-testid="msg-container"]') || 
+                      span.closest('div[role="row"]') ||
+                      span.parentElement;
+          
+          // Go up to find a reasonable container
+          while (parent && parent !== messagePanel) {
+            const parentText = (parent.textContent || '').trim();
+            if (parentText.length > 0 && parentText.length < 1000) {
+              const parentId = parent.getAttribute('data-id') || 
+                              parent.getAttribute('data-testid') ||
+                              parent.className ||
+                              parent.outerHTML.substring(0, 100);
+              
+              if (!messageMap.has(parentId)) {
+                messageMap.set(parentId, parent);
+              }
+              break;
+            }
+            parent = parent.parentElement;
+          }
+        }
+      });
+      
+      messages = Array.from(messageMap.values());
+      console.log(`[Check-in Logger] Text-based search found ${messages.length} potential message containers`);
     }
     
-    // Get group name once
-    const groupName = await extractGroupName();
+    // Strategy 3: Last resort - scan all divs in message panel
+    if (messages.length === 0) {
+      console.log('[Check-in Logger] Trying aggressive scan of all divs...');
+      const allDivs = messagePanel.querySelectorAll('div');
+      const candidateMessages = [];
+      
+      allDivs.forEach(div => {
+        const text = (div.textContent || '').trim();
+        // Look for divs that look like messages
+        if (text.length > 2 && text.length < 500) {
+          // Check if it contains message-like content (not just UI elements)
+          const hasMessageText = !text.match(/^(✓|✓✓|\d{1,2}:\d{2}|AM|PM)$/i);
+          if (hasMessageText) {
+            candidateMessages.push(div);
+          }
+        }
+      });
+      
+      // Remove duplicates and nested elements
+      messages = candidateMessages.filter((div, index) => {
+        // Check if this div is a child of another candidate
+        for (let i = 0; i < candidateMessages.length; i++) {
+          if (i !== index && candidateMessages[i].contains(div)) {
+            return false; // This is nested, skip it
+          }
+        }
+        return true;
+      });
+      
+      console.log(`[Check-in Logger] Aggressive scan found ${messages.length} candidate messages`);
+    }
+    
+    if (messages.length === 0) {
+      console.log('[Check-in Logger] ❌ No messages found at all');
+      return;
+    }
+    
     console.log(`[Check-in Logger] Processing ${messages.length} messages in group: ${groupName}`);
     
     // Process each message
@@ -172,6 +230,7 @@ async function processNewMessages() {
       console.log(`[Check-in Logger] ✅ Successfully logged ${processedCount} events!`);
     } else {
       console.log(`[Check-in Logger] ⚠️ No check-in/out events found in ${checkedCount} messages`);
+      console.log(`[Check-in Logger] 💡 Tip: Make sure messages contain keywords like "check-in", "check out", "in", "out"`);
     }
   } catch (error) {
     console.error('[Check-in Logger] ❌ Error processing messages:', error);
@@ -202,9 +261,9 @@ async function processMessage(messageElement, groupName) {
       return false;
     }
     
-    // Debug: Log all message texts (first 5 only to avoid spam)
-    if (processedMessageIds.size < 5) {
-      console.log(`[Check-in Logger] Message text extracted: "${messageText.substring(0, 50)}..."`);
+    // Debug: Log all message texts (first 10 only to avoid spam)
+    if (processedMessageIds.size < 10) {
+      console.log(`[Check-in Logger] Message text extracted: "${messageText.substring(0, 100)}"`);
     }
     
     // Parse for check-in/check-out

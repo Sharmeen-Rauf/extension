@@ -155,42 +155,59 @@ async function extractGroupName() {
  */
 function extractMessageText(messageElement) {
   try {
-    // Try multiple selectors for message text
+    // Strategy 1: Try specific selectors for message text
     const textSelectors = [
       'span.selectable-text.copyable-text',
       'span[data-testid="selectable-text"]',
       '.selectable-text',
-      '[data-testid="conversation-compose-box-input"]',
-      '.message-text',
       'span[dir="ltr"]',
       'span[dir="auto"]',
       'div[data-testid="msg-container"] span.selectable-text',
-      '[data-testid="msg-container"] span[class*="selectable"]'
+      '[data-testid="msg-container"] span[class*="selectable"]',
+      '.message-text',
+      'span.copyable-text'
     ];
     
     for (const selector of textSelectors) {
-      const element = messageElement.querySelector(selector);
-      if (element) {
-        const text = element.textContent || element.innerText;
-        if (text && text.trim().length > 0) {
-          // Filter out timestamps and metadata
-          const cleanText = text.trim();
+      const elements = messageElement.querySelectorAll(selector);
+      for (const element of elements) {
+        const text = (element.textContent || element.innerText || '').trim();
+        if (text.length > 0 && text.length < 500) {
           // Skip if it looks like a timestamp or metadata
-          if (cleanText.match(/^\d{1,2}:\d{2}\s*(AM|PM)?$/i)) {
+          if (text.match(/^\d{1,2}:\d{2}\s*(AM|PM)?$/i)) {
             continue;
           }
-          return cleanText;
+          // Skip if it's just checkmarks
+          if (text.match(/^[✓✓]+$/)) {
+            continue;
+          }
+          return text;
         }
       }
     }
     
-    // Fallback: get all text content but filter out common non-message elements
-    const text = messageElement.textContent || messageElement.innerText;
-    if (text) {
-      // Remove common WhatsApp UI elements
-      const cleaned = text
+    // Strategy 2: Get all text content and find the main message
+    const allText = messageElement.textContent || messageElement.innerText || '';
+    if (allText) {
+      // Split by lines and find the longest non-metadata line
+      const lines = allText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+      
+      for (const line of lines) {
+        // Skip timestamps, checkmarks, and metadata
+        if (line.match(/^\d{1,2}:\d{2}\s*(AM|PM)?$/i)) continue;
+        if (line.match(/^[✓✓]+$/)) continue;
+        if (line.length < 2) continue;
+        if (line.length > 500) continue;
+        
+        // This looks like a message
+        return line;
+      }
+      
+      // Fallback: Clean the entire text
+      const cleaned = allText
         .replace(/\d{1,2}:\d{2}\s*(AM|PM)?/gi, '') // Remove timestamps
         .replace(/✓\s*✓/g, '') // Remove read receipts
+        .replace(/\s+/g, ' ') // Normalize whitespace
         .trim();
       
       if (cleaned.length > 0 && cleaned.length < 500) {
