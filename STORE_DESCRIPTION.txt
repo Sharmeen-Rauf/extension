@@ -1,0 +1,41 @@
+WhatsApp Web Check-in Logger is a powerful Chrome extension that automatically detects and logs check-in/check-out messages from your WhatsApp Web group chats.
+
+KEY FEATURES:
+✅ Real-time Detection - Automatically detects new messages using MutationObserver
+✅ Intelligent Parsing - Detects check-in/check-out messages using customizable keywords
+✅ CSV Export - Export all logged events to CSV files with proper formatting
+✅ Local Storage - All data stored locally in your browser (privacy-focused)
+✅ Easy-to-Use UI - Simple popup interface for controlling the extension
+✅ Customizable Keywords - Edit check-in/check-out keywords to match your needs
+✅ Auto-download - Optional daily automatic CSV export
+
+HOW IT WORKS:
+1. Enable logging in the extension popup
+2. The extension automatically monitors WhatsApp Web group chats
+3. When a message contains check-in/check-out keywords, it's logged
+4. View logged events in the popup
+5. Export to CSV whenever you need
+
+PRIVACY & SECURITY:
+- All data stored locally in your browser
+- No external servers - your data never leaves your computer
+- Only reads messages when WhatsApp Web is open and logging is enabled
+- You have full control - disable logging anytime
+- Export and delete your data whenever you want
+
+PERFECT FOR:
+- Team attendance tracking
+- Office check-in/check-out logging
+- Group activity monitoring
+- Time tracking in group chats
+
+INSTALLATION:
+1. Click "Add to Chrome"
+2. Grant permissions when prompted
+3. Open WhatsApp Web
+4. Enable logging in the extension popup
+5. Start tracking check-ins/check-outs!
+
+SUPPORT:
+If you encounter any issues, check the extension popup for error messages or review the browser console for debugging information.
+
