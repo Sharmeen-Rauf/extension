@@ -273,25 +273,48 @@ function setupEventListeners() {
     refreshBtn.disabled = true;
     refreshBtn.textContent = 'Refreshing...';
     
-    // Force content script to check for messages
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab && tab.url && tab.url.includes('web.whatsapp.com')) {
-        chrome.tabs.sendMessage(tab.id, { action: 'forceCheck' }).catch(() => {
-          // Ignore if content script not ready
-        });
-      }
-    } catch (error) {
-      console.error('Error sending force check:', error);
-    }
-    
-    // Wait a bit for events to be processed
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
     await loadEvents();
     
     refreshBtn.disabled = false;
     refreshBtn.textContent = 'Refresh';
+  });
+  
+  // Scan Now button
+  const scanNowBtn = document.getElementById('scanNowBtn');
+  scanNowBtn.addEventListener('click', async () => {
+    scanNowBtn.disabled = true;
+    scanNowBtn.textContent = 'Scanning...';
+    
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab && tab.url && tab.url.includes('web.whatsapp.com')) {
+        // Inject and run scan script
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: scanAndStoreMessages
+        });
+        
+        // Wait for processing
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Reload events
+        await loadEvents();
+        
+        scanNowBtn.textContent = '✅ Scanned!';
+        setTimeout(() => {
+          scanNowBtn.textContent = '🔍 Scan Messages Now';
+        }, 2000);
+      } else {
+        showError('Please open WhatsApp Web first');
+        scanNowBtn.textContent = '🔍 Scan Messages Now';
+      }
+    } catch (error) {
+      console.error('Error scanning:', error);
+      showError('Error scanning: ' + error.message);
+      scanNowBtn.textContent = '🔍 Scan Messages Now';
+    } finally {
+      scanNowBtn.disabled = false;
+    }
   });
   
   // Edit keywords button
@@ -404,6 +427,126 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// Scan function to inject into WhatsApp Web page
+function scanAndStoreMessages() {
+  console.log('[Check-in Logger] 🔍 MANUAL SCAN - Starting aggressive scan...');
+  
+  const messagePanel = document.querySelector('[data-testid="conversation-panel-messages"]');
+  if (!messagePanel) {
+    console.log('[Check-in Logger] ❌ Message panel not found!');
+    return;
+  }
+  
+  // Keywords
+  const keywords = {
+    checkin: ['check-in', 'checked in', 'checkin', 'check in', 'check-in:', 'checking in', 'in'],
+    checkout: ['check out', 'checked out', 'checkout', 'check-out', 'check out:', 'checking out', 'out']
+  };
+  
+  const foundMessages = [];
+  
+  // Get all text spans
+  const textSpans = messagePanel.querySelectorAll('span');
+  
+  console.log(`[Check-in Logger] Scanning ${textSpans.length} spans...`);
+  
+  textSpans.forEach(span => {
+    const text = (span.textContent || '').trim();
+    if (text.length < 2 || text.length > 500) return;
+    
+    const lowerText = text.toLowerCase();
+    
+    // Check for check-in
+    for (const keyword of keywords.checkin) {
+      if (lowerText.includes(keyword)) {
+        foundMessages.push({ text, type: 'checkin', element: span });
+        console.log(`[Check-in Logger] ✅ Found check-in: "${text}"`);
+        return;
+      }
+    }
+    
+    // Check for check-out
+    for (const keyword of keywords.checkout) {
+      if (lowerText.includes(keyword)) {
+        foundMessages.push({ text, type: 'checkout', element: span });
+        console.log(`[Check-in Logger] ✅ Found check-out: "${text}"`);
+        return;
+      }
+    }
+  });
+  
+  console.log(`[Check-in Logger] Found ${foundMessages.length} check-in/out messages`);
+  
+  if (foundMessages.length === 0) {
+    console.log('[Check-in Logger] ⚠️ No messages found. Make sure you\'re in a chat with check-in/out messages.');
+    return;
+  }
+  
+  // Get group name
+  let groupName = 'Unknown Group';
+  const header = document.querySelector('[data-testid="conversation-info-header"] span[title]');
+  if (header) {
+    groupName = header.getAttribute('title') || header.textContent || 'Unknown Group';
+  }
+  
+  // Store messages
+  chrome.storage.local.get(['events'], async (result) => {
+    const events = result.events || [];
+    let stored = 0;
+    
+    for (const msg of foundMessages) {
+      // Check if already exists
+      const exists = events.some(e => 
+        e.message === msg.text && 
+        e.type === msg.type &&
+        e.group === groupName
+      );
+      
+      if (!exists) {
+        // Try to get member name
+        let memberName = 'Unknown';
+        let current = msg.element;
+        for (let i = 0; i < 10; i++) {
+          if (current) {
+            const nameSpan = current.querySelector('span[title]');
+            if (nameSpan) {
+              const name = nameSpan.getAttribute('title') || nameSpan.textContent;
+              if (name && name.length > 0 && name.length < 100) {
+                memberName = name;
+                break;
+              }
+            }
+            current = current.parentElement;
+          } else {
+            break;
+          }
+        }
+        
+        const event = {
+          group: groupName,
+          name: memberName,
+          message: msg.text,
+          type: msg.type,
+          isoTimestamp: new Date().toISOString(),
+          id: `scan_${Date.now()}_${Math.random()}`
+        };
+        
+        events.push(event);
+        stored++;
+        console.log(`[Check-in Logger] 💾 Stored:`, event);
+      }
+    }
+    
+    if (stored > 0) {
+      await chrome.storage.local.set({ events });
+      console.log(`[Check-in Logger] ✅ Stored ${stored} new events!`);
+      console.log(`[Check-in Logger] 💡 Click "Refresh" in extension popup to see events`);
+    } else {
+      console.log(`[Check-in Logger] ℹ️ All messages already stored`);
+    }
+  });
 }
 
 // Initialize when DOM is ready
