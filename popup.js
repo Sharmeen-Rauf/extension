@@ -273,6 +273,21 @@ function setupEventListeners() {
     refreshBtn.disabled = true;
     refreshBtn.textContent = 'Refreshing...';
     
+    // Force content script to check for messages
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab && tab.url && tab.url.includes('web.whatsapp.com')) {
+        chrome.tabs.sendMessage(tab.id, { action: 'forceCheck' }).catch(() => {
+          // Ignore if content script not ready
+        });
+      }
+    } catch (error) {
+      console.error('Error sending force check:', error);
+    }
+    
+    // Wait a bit for events to be processed
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     await loadEvents();
     
     refreshBtn.disabled = false;

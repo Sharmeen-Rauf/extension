@@ -88,58 +88,94 @@ function startObserving() {
 async function processNewMessages() {
   try {
     if (!isLoggingEnabled) {
+      console.log('[Check-in Logger] Logging is disabled, skipping');
       return;
     }
+    
+    console.log('[Check-in Logger] Starting message processing...');
     
     // Find all message containers - try multiple selectors
     const messageSelectors = [
       '[data-testid="msg-container"]',
       '[data-testid="conversation-panel-messages"] [data-testid="msg-container"]',
       'div[data-testid="conversation-panel-messages"] > div > div',
+      'div[data-testid="conversation-panel-messages"] div[data-testid="msg-container"]',
       '.message',
       'div[role="application"] div[role="row"]',
-      '[data-testid="msg-container"] > div'
+      '[data-testid="msg-container"] > div',
+      'div[data-testid="conversation-panel-messages"] > div[role="row"]'
     ];
     
     let messages = [];
+    let usedSelector = '';
+    
     for (const selector of messageSelectors) {
       const found = document.querySelectorAll(selector);
       if (found.length > 0) {
         messages = Array.from(found);
-        console.log(`[Check-in Logger] Found ${messages.length} messages using selector: ${selector}`);
+        usedSelector = selector;
+        console.log(`[Check-in Logger] Found ${messages.length} message containers using selector: ${selector}`);
         break;
       }
     }
     
     if (messages.length === 0) {
+      console.log('[Check-in Logger] No messages found with standard selectors, trying fallback...');
       // Try to find messages by text content as fallback
-      const allDivs = document.querySelectorAll('[data-testid="conversation-panel-messages"] div');
-      messages = Array.from(allDivs).filter(div => {
-        const text = div.textContent || '';
-        return text.length > 5 && text.length < 500; // Reasonable message length
-      });
+      const messagePanel = document.querySelector('[data-testid="conversation-panel-messages"]');
+      if (messagePanel) {
+        const allDivs = messagePanel.querySelectorAll('div');
+        messages = Array.from(allDivs).filter(div => {
+          const text = (div.textContent || '').trim();
+          // Look for divs that contain message-like text
+          const hasText = text.length > 3 && text.length < 500;
+          const hasTime = text.match(/\d{1,2}:\d{2}/); // Has timestamp
+          const notEmpty = text.length > 0;
+          return hasText && notEmpty;
+        });
+        console.log(`[Check-in Logger] Fallback found ${messages.length} potential message divs`);
+      } else {
+        console.log('[Check-in Logger] Message panel not found!');
+        return;
+      }
       
       if (messages.length === 0) {
+        console.log('[Check-in Logger] No messages found at all');
         return;
       }
     }
     
     // Get group name once
     const groupName = await extractGroupName();
-    console.log(`[Check-in Logger] Processing messages in group: ${groupName}`);
+    console.log(`[Check-in Logger] Processing ${messages.length} messages in group: ${groupName}`);
     
     // Process each message
     let processedCount = 0;
+    let checkedCount = 0;
+    
     for (const messageElement of messages) {
+      checkedCount++;
       const result = await processMessage(messageElement, groupName);
-      if (result) processedCount++;
+      if (result) {
+        processedCount++;
+      }
+      
+      // Log progress every 10 messages
+      if (checkedCount % 10 === 0) {
+        console.log(`[Check-in Logger] Checked ${checkedCount}/${messages.length} messages, found ${processedCount} events`);
+      }
     }
     
+    console.log(`[Check-in Logger] Finished: Checked ${checkedCount} messages, processed ${processedCount} new check-in/out events`);
+    
     if (processedCount > 0) {
-      console.log(`[Check-in Logger] Processed ${processedCount} new check-in/out events`);
+      console.log(`[Check-in Logger] ✅ Successfully logged ${processedCount} events!`);
+    } else {
+      console.log(`[Check-in Logger] ⚠️ No check-in/out events found in ${checkedCount} messages`);
     }
   } catch (error) {
-    console.error('[Check-in Logger] Error processing messages:', error);
+    console.error('[Check-in Logger] ❌ Error processing messages:', error);
+    console.error(error.stack);
   }
 }
 
@@ -166,6 +202,11 @@ async function processMessage(messageElement, groupName) {
       return false;
     }
     
+    // Debug: Log all message texts (first 5 only to avoid spam)
+    if (processedMessageIds.size < 5) {
+      console.log(`[Check-in Logger] Message text extracted: "${messageText.substring(0, 50)}..."`);
+    }
+    
     // Parse for check-in/check-out
     const parseResult = parseCheckInOut(messageText);
     
@@ -175,7 +216,7 @@ async function processMessage(messageElement, groupName) {
       return false;
     }
     
-    console.log(`[Check-in Logger] Detected ${parseResult.type}: "${messageText}"`);
+    console.log(`[Check-in Logger] ✅ Detected ${parseResult.type}: "${messageText}"`);
     
     // Extract member name
     const memberName = extractMemberName(messageElement);
