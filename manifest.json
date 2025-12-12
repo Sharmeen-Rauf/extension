@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "WhatsApp Web Check-in Logger",
   "version": "1.0.0",
-  "description": "Automatically logs check-in/check-out messages from WhatsApp Web group chats to CSV files. Real-time detection with customizable keywords.",
+  "description": "Logs check-in/check-out messages from WhatsApp Web to CSV. Real-time detection with customizable keywords.",
   "permissions": [
     "activeTab",
     "storage",
